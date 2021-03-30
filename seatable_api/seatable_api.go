@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-type SeaTableAPI struct {
+type Base struct {
 	Token           string
 	ServerURL       string
 	DtableServerURL string
@@ -28,14 +28,14 @@ type SeaTableAPI struct {
 	Client          *SocketIO
 }
 
-func Init(token string, serverURL string) *SeaTableAPI {
-	return &SeaTableAPI{Token: token, ServerURL: serverURL, Timeout: 30}
+func Init(token string, serverURL string) *Base {
+	return &Base{Token: token, ServerURL: serverURL, Timeout: 30}
 }
 
-func (s *SeaTableAPI) Auth(withSocketIO bool) error {
+func (s *Base) Auth(withSocketIO bool) error {
 	s.JwtExp = time.Now().Add(72 * time.Hour).Unix()
 	url := s.ServerURL + "/api/v2.1/dtable/app-access-token/"
-	Headers := parseHeaders(s.Token)
+	Headers := makeHeaders(s.Token)
 	status, body, err := httpGet(url, "", Headers, s.Timeout, nil)
 	if err != nil {
 		err := fmt.Errorf("failed to request url: %s: %v", url, err)
@@ -47,9 +47,15 @@ func (s *SeaTableAPI) Auth(withSocketIO bool) error {
 		return err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return err
 	}
 
@@ -61,7 +67,7 @@ func (s *SeaTableAPI) Auth(withSocketIO bool) error {
 	accessToken, ok := ret["access_token"].(string)
 	if ok {
 		s.JwtToken = accessToken
-		s.Headers = parseHeaders(accessToken)
+		s.Headers = makeHeaders(accessToken)
 	}
 
 	workspaceID, ok := ret["workspace_id"].(string)
@@ -95,8 +101,8 @@ func (s *SeaTableAPI) Auth(withSocketIO bool) error {
 	return nil
 }
 
-func (s *SeaTableAPI) Clone() (*SeaTableAPI, error) {
-	var dst = new(SeaTableAPI)
+func (s *Base) Clone() (*Base, error) {
+	var dst = new(Base)
 	b, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
@@ -110,7 +116,7 @@ func parseServerURL(serverURL string) string {
 	return strings.TrimRight(serverURL, "/")
 }
 
-func (s *SeaTableAPI) GetMetadata() (interface{}, error) {
+func (s *Base) GetMetadata() (interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/metadata/"
 
 	status, body, err := httpGet(url, "", s.Headers, s.Timeout, nil)
@@ -124,16 +130,22 @@ func (s *SeaTableAPI) GetMetadata() (interface{}, error) {
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret["metadata"], nil
 }
 
-func (s *SeaTableAPI) AppendRow(tableName string, rowData interface{}) (map[string]interface{}, error) {
+func (s *Base) AppendRow(tableName string, rowData interface{}) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/rows/"
 
 	data := make(map[string]interface{})
@@ -157,16 +169,22 @@ func (s *SeaTableAPI) AppendRow(tableName string, rowData interface{}) (map[stri
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) BatchAppendRows(tableName string, rowsData []interface{}) (map[string]interface{}, error) {
+func (s *Base) BatchAppendRows(tableName string, rowsData []interface{}) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/batch-append-rows/"
 
 	data := make(map[string]interface{})
@@ -190,16 +208,22 @@ func (s *SeaTableAPI) BatchAppendRows(tableName string, rowsData []interface{}) 
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) InsertRow(tableName string, rowData interface{}, anchorRowID string) (map[string]interface{}, error) {
+func (s *Base) InsertRow(tableName string, rowData interface{}, anchorRowID string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/rows/"
 
 	data := make(map[string]interface{})
@@ -224,16 +248,22 @@ func (s *SeaTableAPI) InsertRow(tableName string, rowData interface{}, anchorRow
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) UpdateRow(tableName string, rowID string, rowData interface{}) (map[string]interface{}, error) {
+func (s *Base) UpdateRow(tableName string, rowID string, rowData interface{}) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/rows/"
 
 	data := make(map[string]interface{})
@@ -258,16 +288,22 @@ func (s *SeaTableAPI) UpdateRow(tableName string, rowID string, rowData interfac
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) DeleteRow(tableName, rowID string) (map[string]interface{}, error) {
+func (s *Base) DeleteRow(tableName, rowID string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/rows/"
 
 	data := make(map[string]interface{})
@@ -291,16 +327,22 @@ func (s *SeaTableAPI) DeleteRow(tableName, rowID string) (map[string]interface{}
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) BatchDeleteRows(tableName string, rowIDs interface{}) (map[string]interface{}, error) {
+func (s *Base) BatchDeleteRows(tableName string, rowIDs interface{}) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/batch-delete-rows/"
 
 	data := make(map[string]interface{})
@@ -324,16 +366,22 @@ func (s *SeaTableAPI) BatchDeleteRows(tableName string, rowIDs interface{}) (map
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) FilterRows(tableName string, filters []map[string]interface{}, viewName string, filterConjunction string) (interface{}, error) {
+func (s *Base) FilterRows(tableName string, filters []map[string]interface{}, viewName string, filterConjunction string) (interface{}, error) {
 	if filters == nil {
 		err := fmt.Errorf("filters can not be empty")
 		return nil, err
@@ -386,16 +434,22 @@ func (s *SeaTableAPI) FilterRows(tableName string, filters []map[string]interfac
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret["rows"], nil
 }
 
-func (s *SeaTableAPI) GetFileDownloadLink(path string) (interface{}, error) {
+func (s *Base) GetFileDownloadLink(path string) (interface{}, error) {
 	url := s.ServerURL + "/api/v2.1/dtable/app-download-link/"
 
 	params := neturl.Values{}
@@ -412,16 +466,22 @@ func (s *SeaTableAPI) GetFileDownloadLink(path string) (interface{}, error) {
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret["download_link"], nil
 }
 
-func (s *SeaTableAPI) GetFileUploadLink() (map[string]interface{}, error) {
+func (s *Base) GetFileUploadLink() (map[string]interface{}, error) {
 	url := s.ServerURL + "/api/v2.1/dtable/app-upload-link/"
 
 	status, body, err := httpGet(url, "", s.Headers, s.Timeout, nil)
@@ -435,16 +495,22 @@ func (s *SeaTableAPI) GetFileUploadLink() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) AddLink(linkID, tableName, otherTableName, rowID, otherRowID string) (map[string]interface{}, error) {
+func (s *Base) AddLink(linkID, tableName, otherTableName, rowID, otherRowID string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/links/"
 
 	data := make(map[string]interface{})
@@ -471,16 +537,22 @@ func (s *SeaTableAPI) AddLink(linkID, tableName, otherTableName, rowID, otherRow
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) RemoveLink(linkID, tableName, otherTableName, rowID, otherRowID string) (map[string]interface{}, error) {
+func (s *Base) RemoveLink(linkID, tableName, otherTableName, rowID, otherRowID string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/links/"
 
 	data := make(map[string]interface{})
@@ -507,16 +579,22 @@ func (s *SeaTableAPI) RemoveLink(linkID, tableName, otherTableName, rowID, other
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) GetColumnLinkID(tableName, columnName, viewName string) (interface{}, error) {
+func (s *Base) GetColumnLinkID(tableName, columnName, viewName string) (interface{}, error) {
 	columns, err := s.ListColumns(tableName, viewName)
 	if err != nil {
 		return nil, err
@@ -537,7 +615,7 @@ func (s *SeaTableAPI) GetColumnLinkID(tableName, columnName, viewName string) (i
 	return nil, nil
 }
 
-func (s *SeaTableAPI) ListColumns(tableName, viewName string) (interface{}, error) {
+func (s *Base) ListColumns(tableName, viewName string) (interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	params := neturl.Values{}
@@ -557,16 +635,22 @@ func (s *SeaTableAPI) ListColumns(tableName, viewName string) (interface{}, erro
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret["columns"], nil
 }
 
-func (s *SeaTableAPI) InsertColumn(tableName, columnName string, columnType ColumnTypes, columnKey string) (map[string]interface{}, error) {
+func (s *Base) InsertColumn(tableName, columnName string, columnType ColumnTypes, columnKey string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -594,16 +678,22 @@ func (s *SeaTableAPI) InsertColumn(tableName, columnName string, columnType Colu
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) RenameColumn(tableName, columnKey, newColumnName string) (map[string]interface{}, error) {
+func (s *Base) RenameColumn(tableName, columnKey, newColumnName string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -629,16 +719,22 @@ func (s *SeaTableAPI) RenameColumn(tableName, columnKey, newColumnName string) (
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) ResizeColumn(tableName, columnKey string, newColumnWidth int) (map[string]interface{}, error) {
+func (s *Base) ResizeColumn(tableName, columnKey string, newColumnWidth int) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -664,16 +760,22 @@ func (s *SeaTableAPI) ResizeColumn(tableName, columnKey string, newColumnWidth i
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) FreezeColumn(tableName, columnKey string, frozen bool) (map[string]interface{}, error) {
+func (s *Base) FreezeColumn(tableName, columnKey string, frozen bool) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -699,16 +801,22 @@ func (s *SeaTableAPI) FreezeColumn(tableName, columnKey string, frozen bool) (ma
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) moveColumn(tableName, columnKey string, targetColumnKey bool) (map[string]interface{}, error) {
+func (s *Base) moveColumn(tableName, columnKey string, targetColumnKey bool) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -734,16 +842,22 @@ func (s *SeaTableAPI) moveColumn(tableName, columnKey string, targetColumnKey bo
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) ModifyColumnType(tableName, columnKey string, newColumnType ColumnTypes) (map[string]interface{}, error) {
+func (s *Base) ModifyColumnType(tableName, columnKey string, newColumnType ColumnTypes) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -769,16 +883,22 @@ func (s *SeaTableAPI) ModifyColumnType(tableName, columnKey string, newColumnTyp
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) DeleteColumn(tableName, columnKey string) (map[string]interface{}, error) {
+func (s *Base) DeleteColumn(tableName, columnKey string) (map[string]interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/columns/"
 
 	data := make(map[string]interface{})
@@ -802,16 +922,22 @@ func (s *SeaTableAPI) DeleteColumn(tableName, columnKey string) (map[string]inte
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-func (s *SeaTableAPI) DownloadFile(url, savePath string) error {
+func (s *Base) DownloadFile(url, savePath string) error {
 	if strings.Index(url, s.DtableUUID) < 0 {
 		err := fmt.Errorf("url invalid")
 		return err
@@ -862,7 +988,7 @@ func (s *SeaTableAPI) DownloadFile(url, savePath string) error {
 	return nil
 }
 
-func (s *SeaTableAPI) UploadBytesFile(name string, r io.Reader, relativePath, fileType string, replace bool) (map[string]interface{}, error) {
+func (s *Base) UploadBytesFile(name string, r io.Reader, relativePath, fileType string, replace bool) (map[string]interface{}, error) {
 	uploadLinkDict, err := s.GetFileUploadLink()
 	if err != nil {
 		err := fmt.Errorf("failed to get file upload link: %v", err)
@@ -895,13 +1021,19 @@ func (s *SeaTableAPI) UploadBytesFile(name string, r io.Reader, relativePath, fi
 	} else {
 		values["replace"] = bytes.NewBuffer([]byte("0"))
 	}
-	form, err := createForm(values, name)
+	form, contentType, err := createForm(values, name)
 	if err != nil {
 		err := fmt.Errorf("failed to create multipart form: %v", err)
 		return nil, err
 	}
 
-	status, body, err := httpPost(uploadLink, s.Headers, form, s.Timeout)
+	headers := make(map[string]string)
+	for k, v := range s.Headers {
+		headers[k] = v
+	}
+	headers["Content-Type"] = contentType
+
+	status, body, err := httpPost(uploadLink, headers, form, s.Timeout)
 	if err != nil {
 		err := fmt.Errorf("failed to post row to %s: %v", uploadLink, err)
 		return nil, err
@@ -912,9 +1044,26 @@ func (s *SeaTableAPI) UploadBytesFile(name string, r io.Reader, relativePath, fi
 		return nil, err
 	}
 
-	data, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	datas, ok := rsp.([]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
+		return nil, err
+	}
+
+	if len(datas) < 1 {
+		err := fmt.Errorf("invalid response")
+		return nil, err
+	}
+
+	data, ok := datas[0].(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
@@ -946,7 +1095,7 @@ func (s *SeaTableAPI) UploadBytesFile(name string, r io.Reader, relativePath, fi
 	return ret, nil
 }
 
-func (s *SeaTableAPI) UploadLocalFile(filePath, name, relativePath, fileType string, replace bool) (map[string]interface{}, error) {
+func (s *Base) UploadLocalFile(filePath, name, relativePath, fileType string, replace bool) (map[string]interface{}, error) {
 	if fileType != "image" && fileType != "file" {
 		err := fmt.Errorf("file_type invalid")
 		return nil, err
@@ -997,13 +1146,19 @@ func (s *SeaTableAPI) UploadLocalFile(filePath, name, relativePath, fileType str
 	defer f.Close()
 	values["file"] = f
 
-	form, err := createForm(values, name)
+	form, contentType, err := createForm(values, name)
 	if err != nil {
 		err := fmt.Errorf("failed to create multipart form: %v", err)
 		return nil, err
 	}
 
-	status, body, err := httpPost(uploadLink, s.Headers, form, s.Timeout)
+	headers := make(map[string]string)
+	for k, v := range s.Headers {
+		headers[k] = v
+	}
+	headers["Content-Type"] = contentType
+
+	status, body, err := httpPost(uploadLink, headers, form, s.Timeout)
 	if err != nil {
 		err := fmt.Errorf("failed to post row to %s: %v", uploadLink, err)
 		return nil, err
@@ -1014,9 +1169,26 @@ func (s *SeaTableAPI) UploadLocalFile(filePath, name, relativePath, fileType str
 		return nil, err
 	}
 
-	data, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	datas, ok := rsp.([]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
+		return nil, err
+	}
+
+	if len(datas) < 1 {
+		err := fmt.Errorf("invalid response")
+		return nil, err
+	}
+
+	data, ok := datas[0].(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
@@ -1048,7 +1220,8 @@ func (s *SeaTableAPI) UploadLocalFile(filePath, name, relativePath, fileType str
 	return ret, nil
 }
 
-func (s *SeaTableAPI) Filter(tableName, conditions, viewName string) (*QuerySet, error) {
+/*
+func (s *Base) Filter(tableName, conditions, viewName string) (*QuerySet, error) {
 	var err error
 	base, err := s.Clone()
 	if err != nil {
@@ -1069,8 +1242,9 @@ func (s *SeaTableAPI) Filter(tableName, conditions, viewName string) (*QuerySet,
 
 	return queryset, nil
 }
+*/
 
-func (s *SeaTableAPI) ListRows(tableName, viewName string) (interface{}, error) {
+func (s *Base) ListRows(tableName, viewName string) (interface{}, error) {
 	url := s.DtableServerURL + "/api/v1/dtables/" + s.DtableUUID + "/rows/"
 
 	params := neturl.Values{}
@@ -1090,16 +1264,22 @@ func (s *SeaTableAPI) ListRows(tableName, viewName string) (interface{}, error) 
 		return nil, err
 	}
 
-	ret, err := parseResponse(body)
+	rsp, err := parseResponse(body)
 	if err != nil {
 		err := fmt.Errorf("failed to parse response: %v", err)
+		return nil, err
+	}
+
+	ret, ok := rsp.(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("failed to assert response")
 		return nil, err
 	}
 
 	return ret["rows"], nil
 }
 
-func createForm(values map[string]io.Reader, name string) (io.Reader, error) {
+func createForm(values map[string]io.Reader, name string) (io.Reader, string, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
 	defer w.Close()
@@ -1109,22 +1289,22 @@ func createForm(values map[string]io.Reader, name string) (io.Reader, error) {
 		var err error
 		if k == "file" {
 			if fw, err = w.CreateFormFile(k, name); err != nil {
-				return nil, err
+				return nil, "", err
 			}
 		} else {
 			if fw, err = w.CreateFormField(k); err != nil {
-				return nil, err
+				return nil, "", err
 			}
 		}
 		if _, err = io.Copy(fw, v); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 
-	return buf, nil
+	return buf, w.FormDataContentType(), nil
 }
 
-func parseHeaders(token string) map[string]string {
+func makeHeaders(token string) map[string]string {
 	headers := make(map[string]string)
 	headers["Content-Type"] = "application/json"
 	headers["Authorization"] = "Token " + token
@@ -1132,8 +1312,9 @@ func parseHeaders(token string) map[string]string {
 	return headers
 }
 
-func parseResponse(body []byte) (map[string]interface{}, error) {
-	data := make(map[string]interface{})
+func parseResponse(body []byte) (interface{}, error) {
+	var data interface{}
+	//data := make(map[string]interface{})
 	err := json.Unmarshal(body, &data)
 	if err != nil {
 		return nil, err

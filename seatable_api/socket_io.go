@@ -9,14 +9,14 @@ import (
 
 type SocketIO struct {
 	Client *gosocketio.Client
-	Base   *SeaTableAPI
+	Base   *Base
 }
 
 type Message struct {
 	msg interface{}
 }
 
-func InitSocketIO(base *SeaTableAPI) (*SocketIO, error) {
+func InitSocketIO(base *Base) (*SocketIO, error) {
 	url := base.DtableServerURL + "?dtable_uuid=" + base.DtableUUID
 
 	c, err := gosocketio.Dial(
